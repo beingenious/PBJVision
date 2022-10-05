@@ -39,7 +39,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, PBJCameraDevice) {
     PBJCameraDeviceBack = 0,
-    PBJCameraDeviceFront
+    PBJCameraDeviceBackUltraWide,
+    PBJCameraDeviceBackTelephoto,
+    PBJCameraDeviceFront,
+    PBJCameraDeviceFrontUltraWide,
+    PBJCameraDeviceFrontTelephoto
 };
 
 typedef NS_ENUM(NSInteger, PBJCameraMode) {

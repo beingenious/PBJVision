@@ -97,11 +97,19 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
     AVCaptureSession *_captureSession;
     
     AVCaptureDevice *_captureDeviceFront;
+    AVCaptureDevice *_captureDeviceFrontUltraWide;
+    AVCaptureDevice *_captureDeviceFrontTelephoto;
     AVCaptureDevice *_captureDeviceBack;
+    AVCaptureDevice *_captureDeviceBackUltraWide;
+    AVCaptureDevice *_captureDeviceBackTelephoto;
     AVCaptureDevice *_captureDeviceAudio;
     
     AVCaptureDeviceInput *_captureDeviceInputFront;
+    AVCaptureDeviceInput *_captureDeviceInputFrontUltraWide;
+    AVCaptureDeviceInput *_captureDeviceInputFrontTelephoto;
     AVCaptureDeviceInput *_captureDeviceInputBack;
+    AVCaptureDeviceInput *_captureDeviceInputBackUltraWide;
+    AVCaptureDeviceInput *_captureDeviceInputBackTelephoto;
     AVCaptureDeviceInput *_captureDeviceInputAudio;
 
     AVCapturePhotoOutput *_captureOutputPhoto;
@@ -802,7 +810,19 @@ typedef void (^PBJVisionBlock)();
 
     // capture devices
     _captureDeviceFront = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionFront];
+    if (@available(iOS 13.0, *)) {
+        _captureDeviceFrontUltraWide = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionFront type:AVCaptureDeviceTypeBuiltInUltraWideCamera];
+    } else {
+        _captureDeviceFrontUltraWide = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionFront type:nil]; // Fallback on earlier versions
+    }
+    _captureDeviceFrontTelephoto = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionFront type:AVCaptureDeviceTypeBuiltInTelephotoCamera];
     _captureDeviceBack = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionBack];
+    if (@available(iOS 13.0, *)) {
+        _captureDeviceBackUltraWide = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionBack type:AVCaptureDeviceTypeBuiltInUltraWideCamera];
+    } else {
+        _captureDeviceBackUltraWide = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionBack type:nil];
+    }
+    _captureDeviceBackTelephoto = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionBack type:AVCaptureDeviceTypeBuiltInTelephotoCamera];
 
     // capture device inputs
     NSError *error = nil;
@@ -812,9 +832,33 @@ typedef void (^PBJVisionBlock)();
         error = nil;
     }
     
+    _captureDeviceInputFrontUltraWide = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceFrontUltraWide error:&error];
+    if (error) {
+        DLog(@"error setting up front ultra wide camera input (%@)", error);
+        error = nil;
+    }
+    
+    _captureDeviceInputFrontTelephoto = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceFrontTelephoto error:&error];
+    if (error) {
+        DLog(@"error setting up front telephoto camera input (%@)", error);
+        error = nil;
+    }
+    
     _captureDeviceInputBack = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceBack error:&error];
     if (error) {
         DLog(@"error setting up back camera input (%@)", error);
+        error = nil;
+    }
+    
+    _captureDeviceInputBackUltraWide = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceBackUltraWide error:&error];
+    if (error) {
+        DLog(@"error setting up back ultra wide camera input (%@)", error);
+        error = nil;
+    }
+    
+    _captureDeviceInputBackTelephoto = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceBackTelephoto error:&error];
+    if (error) {
+        DLog(@"error setting up back telephoto camera input (%@)", error);
         error = nil;
     }
     
@@ -926,9 +970,17 @@ typedef void (^PBJVisionBlock)();
     _captureDeviceAudio = nil;
     _captureDeviceInputAudio = nil;
     _captureDeviceInputFront = nil;
+    _captureDeviceInputFrontUltraWide = nil;
+    _captureDeviceInputFrontTelephoto = nil;
     _captureDeviceInputBack = nil;
+    _captureDeviceInputBackUltraWide = nil;
+    _captureDeviceInputBackTelephoto = nil;
     _captureDeviceFront = nil;
+    _captureDeviceFrontUltraWide = nil;
+    _captureDeviceFrontTelephoto = nil;
     _captureDeviceBack = nil;
+    _captureDeviceBackUltraWide = nil;
+    _captureDeviceBackTelephoto = nil;
 
     _captureSession = nil;
     _currentDevice = nil;
@@ -957,8 +1009,12 @@ typedef void (^PBJVisionBlock)();
     
     BOOL shouldSwitchDevice = (_currentDevice == nil) ||
                               ((_currentDevice == _captureDeviceFront) && (_cameraDevice != PBJCameraDeviceFront)) ||
-                              ((_currentDevice == _captureDeviceBack) && (_cameraDevice != PBJCameraDeviceBack));
-    
+                              ((_currentDevice == _captureDeviceFrontUltraWide) && (_cameraDevice != PBJCameraDeviceFrontUltraWide)) ||
+                              ((_currentDevice == _captureDeviceFrontTelephoto) && (_cameraDevice != PBJCameraDeviceFrontTelephoto)) ||
+                              ((_currentDevice == _captureDeviceBack) && (_cameraDevice != PBJCameraDeviceBack)) ||
+                              ((_currentDevice == _captureDeviceBackUltraWide) && (_cameraDevice != PBJCameraDeviceBackUltraWide)) ||
+                              ((_currentDevice == _captureDeviceBackTelephoto) && (_cameraDevice != PBJCameraDeviceBackTelephoto));
+
     AVCaptureOutput *cameraOutput = [AVCapturePhotoOutput class] ? _captureOutputPhoto : _captureOutputImage;
     BOOL shouldSwitchMode = (_currentOutput == nil) ||
                             ((_currentOutput == cameraOutput) && (_cameraMode != PBJCameraModePhoto)) ||
@@ -981,9 +1037,17 @@ typedef void (^PBJVisionBlock)();
         switch (_cameraDevice) {
           case PBJCameraDeviceFront:
           {
-            if (_captureDeviceInputBack)
+              if (_captureDeviceInputBack)
                 [_captureSession removeInput:_captureDeviceInputBack];
-            
+              if (_captureDeviceInputBackUltraWide)
+                  [_captureSession removeInput:_captureDeviceInputBackUltraWide];
+              if (_captureDeviceInputBackTelephoto)
+                  [_captureSession removeInput:_captureDeviceInputBackTelephoto];
+              if (_captureDeviceInputFrontUltraWide)
+                  [_captureSession removeInput:_captureDeviceInputFrontUltraWide];
+              if (_captureDeviceInputFrontTelephoto)
+                  [_captureSession removeInput:_captureDeviceInputFrontTelephoto];
+
             if (_captureDeviceInputFront && [_captureSession canAddInput:_captureDeviceInputFront]) {
                 [_captureSession addInput:_captureDeviceInputFront];
                 newDeviceInput = _captureDeviceInputFront;
@@ -991,10 +1055,58 @@ typedef void (^PBJVisionBlock)();
             }
             break;
           }
+            case PBJCameraDeviceFrontUltraWide:
+            {
+                if (_captureDeviceInputBack)
+                  [_captureSession removeInput:_captureDeviceInputBack];
+                if (_captureDeviceInputBackUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputBackUltraWide];
+                if (_captureDeviceInputBackTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputBackTelephoto];
+                if (_captureDeviceInputFront)
+                    [_captureSession removeInput:_captureDeviceInputFront];
+                if (_captureDeviceInputFrontTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputFrontTelephoto];
+
+              if (_captureDeviceInputFrontUltraWide && [_captureSession canAddInput:_captureDeviceInputFrontUltraWide]) {
+                  [_captureSession addInput:_captureDeviceInputFrontUltraWide];
+                  newDeviceInput = _captureDeviceInputFrontUltraWide;
+                  newCaptureDevice = _captureDeviceFrontUltraWide;
+              }
+              break;
+            }
+            case PBJCameraDeviceFrontTelephoto:
+            {
+                if (_captureDeviceInputBack)
+                  [_captureSession removeInput:_captureDeviceInputBack];
+                if (_captureDeviceInputBackUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputBackUltraWide];
+                if (_captureDeviceInputBackTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputBackTelephoto];
+                if (_captureDeviceInputFront)
+                    [_captureSession removeInput:_captureDeviceInputFront];
+                if (_captureDeviceInputFrontUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputFrontUltraWide];
+
+              if (_captureDeviceInputFrontTelephoto && [_captureSession canAddInput:_captureDeviceInputFrontTelephoto]) {
+                  [_captureSession addInput:_captureDeviceInputFrontTelephoto];
+                  newDeviceInput = _captureDeviceInputFrontTelephoto;
+                  newCaptureDevice = _captureDeviceFrontTelephoto;
+              }
+              break;
+            }
           case PBJCameraDeviceBack:
           {
-            if (_captureDeviceInputFront)
-                [_captureSession removeInput:_captureDeviceInputFront];
+              if (_captureDeviceInputBackUltraWide)
+                  [_captureSession removeInput:_captureDeviceInputBackUltraWide];
+              if (_captureDeviceInputBackTelephoto)
+                  [_captureSession removeInput:_captureDeviceInputBackTelephoto];
+              if (_captureDeviceInputFront)
+                  [_captureSession removeInput:_captureDeviceInputFront];
+              if (_captureDeviceInputFrontUltraWide)
+                  [_captureSession removeInput:_captureDeviceInputFrontUltraWide];
+              if (_captureDeviceInputFrontTelephoto)
+                  [_captureSession removeInput:_captureDeviceInputFrontTelephoto];
             
             if (_captureDeviceInputBack && [_captureSession canAddInput:_captureDeviceInputBack]) {
                 [_captureSession addInput:_captureDeviceInputBack];
@@ -1003,6 +1115,46 @@ typedef void (^PBJVisionBlock)();
             }
             break;
           }
+            case PBJCameraDeviceBackUltraWide:
+            {
+                if (_captureDeviceInputBack)
+                  [_captureSession removeInput:_captureDeviceInputBack];
+                if (_captureDeviceInputBackTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputBackTelephoto];
+                if (_captureDeviceInputFront)
+                    [_captureSession removeInput:_captureDeviceInputFront];
+                if (_captureDeviceInputFrontUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputFrontUltraWide];
+                if (_captureDeviceInputFrontTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputFrontTelephoto];
+              
+              if (_captureDeviceInputBackUltraWide && [_captureSession canAddInput:_captureDeviceInputBackUltraWide]) {
+                  [_captureSession addInput:_captureDeviceInputBackUltraWide];
+                  newDeviceInput = _captureDeviceInputBackUltraWide;
+                  newCaptureDevice = _captureDeviceBackUltraWide;
+              }
+              break;
+            }
+            case PBJCameraDeviceBackTelephoto:
+            {
+                if (_captureDeviceInputBack)
+                  [_captureSession removeInput:_captureDeviceInputBack];
+                if (_captureDeviceInputBackUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputBackUltraWide];
+                if (_captureDeviceInputFront)
+                    [_captureSession removeInput:_captureDeviceInputFront];
+                if (_captureDeviceInputFrontUltraWide)
+                    [_captureSession removeInput:_captureDeviceInputFrontUltraWide];
+                if (_captureDeviceInputFrontTelephoto)
+                    [_captureSession removeInput:_captureDeviceInputFrontTelephoto];
+              
+              if (_captureDeviceInputBackTelephoto && [_captureSession canAddInput:_captureDeviceInputBackTelephoto]) {
+                  [_captureSession addInput:_captureDeviceInputBackTelephoto];
+                  newDeviceInput = _captureDeviceInputBackTelephoto;
+                  newCaptureDevice = _captureDeviceBackTelephoto;
+              }
+              break;
+            }
           default:
             break;
         }
@@ -1477,7 +1629,7 @@ typedef void (^PBJVisionBlock)();
         default:
         {
             if ([videoConnection isVideoMirroringSupported]) {
-                BOOL mirror = (_cameraDevice == PBJCameraDeviceFront);
+                BOOL mirror = (_cameraDevice == PBJCameraDeviceFront || _cameraDevice == PBJCameraDeviceFrontUltraWide || _cameraDevice == PBJCameraDeviceFrontTelephoto);
                 [videoConnection setVideoMirrored:mirror];
             }
             if ([previewConnection isVideoMirroringSupported]) {
@@ -2742,7 +2894,7 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
     glEnableVertexAttribArray(vertexAttributeLocation);
     glVertexAttribPointer(vertexAttributeLocation, 2, GL_FLOAT, GL_FALSE, 0, vertices);
     
-    if (_cameraDevice == PBJCameraDeviceFront) {
+    if (_cameraDevice == PBJCameraDeviceFront || _cameraDevice == PBJCameraDeviceFrontUltraWide || _cameraDevice == PBJCameraDeviceFrontTelephoto) {
         glEnableVertexAttribArray(textureAttributeLocation);
         glVertexAttribPointer(textureAttributeLocation, 2, GL_FLOAT, GL_FALSE, 0, textureCoordinatesVerticalFlip);
     } else {

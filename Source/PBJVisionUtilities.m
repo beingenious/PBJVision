@@ -32,6 +32,18 @@
 
 + (AVCaptureDevice *)captureDeviceForPosition:(AVCaptureDevicePosition)position
 {
+    return [self captureDeviceForPosition:position type:nil];
+}
+
++ (AVCaptureDevice *)captureDeviceForPosition:(AVCaptureDevicePosition)position type:(AVCaptureDeviceType)deviceType
+{
+    if (deviceType != nil) {
+        AVCaptureDeviceDiscoverySession *discoverySession = [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[deviceType] mediaType:AVMediaTypeVideo position:position];
+        if ([discoverySession.devices count] > 0) {
+            return [discoverySession.devices firstObject];
+        }
+    }
+    
     NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
     for (AVCaptureDevice *device in devices) {
         if ([device position] == position) {
