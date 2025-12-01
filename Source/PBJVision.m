@@ -192,6 +192,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
         unsigned int thumbnailEnabled:1;
         unsigned int defaultVideoThumbnails:1;
         unsigned int videoCaptureFrame:1;
+        unsigned int sessionConfiguring:1;
     } __block _flags;
 }
 
@@ -619,7 +620,8 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
     
     if (supportingFormat) {
         NSError *error = nil;
-        [_captureSession beginConfiguration];  // the session to which the receiver's AVCaptureDeviceInput is added.
+        [_captureSession beginConfiguration];
+        _flags.sessionConfiguring = YES;
         if ([_currentDevice lockForConfiguration:&error]) {
             [_currentDevice setActiveFormat:supportingFormat];
             _currentDevice.activeVideoMinFrameDuration = fps;
@@ -629,8 +631,9 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
         } else if (error) {
             DLog(@"error locking device for frame rate change (%@)", error);
         }
+        [_captureSession commitConfiguration];
+        _flags.sessionConfiguring = NO;
     }
-    [_captureSession commitConfiguration];
     [self _enqueueBlockOnMainQueue:^{
         if ([_delegate respondsToSelector:@selector(visionDidChangeVideoFormatAndFrameRate:)])
             [_delegate visionDidChangeVideoFormatAndFrameRate:self];
@@ -778,8 +781,10 @@ typedef void (^PBJVisionBlock)();
 - (void)_commitBlock:(PBJVisionBlock)block
 {
     [_captureSession beginConfiguration];
+    _flags.sessionConfiguring = YES;
     block();
     [_captureSession commitConfiguration];
+    _flags.sessionConfiguring = NO;
 }
 
 #pragma mark - camera
@@ -1030,6 +1035,7 @@ typedef void (^PBJVisionBlock)();
     AVCaptureDevice *newCaptureDevice = nil;
     
     [_captureSession beginConfiguration];
+    _flags.sessionConfiguring = YES;
     
     // setup session device
     
@@ -1347,6 +1353,7 @@ typedef void (^PBJVisionBlock)();
     }
 
     [_captureSession commitConfiguration];
+    _flags.sessionConfiguring = NO;
     
     DLog(@"capture session setup");
 }
@@ -1393,6 +1400,13 @@ typedef void (^PBJVisionBlock)();
 
         if (_previewLayer)
             _previewLayer.connection.enabled = NO;
+
+        // Ensure any ongoing configuration is committed before stopping
+        // to avoid "stopRunning may not be called between beginConfiguration and commitConfiguration" crash
+        if (_flags.sessionConfiguring) {
+            [_captureSession commitConfiguration];
+            _flags.sessionConfiguring = NO;
+        }
 
         if ([_captureSession isRunning])
             [_captureSession stopRunning];
