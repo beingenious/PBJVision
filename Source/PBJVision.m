@@ -1401,15 +1401,30 @@ typedef void (^PBJVisionBlock)();
         if (_previewLayer)
             _previewLayer.connection.enabled = NO;
 
-        // Ensure any ongoing configuration is committed before stopping
-        // to avoid "stopRunning may not be called between beginConfiguration and commitConfiguration" crash
-        if (_flags.sessionConfiguring) {
-            [_captureSession commitConfiguration];
-            _flags.sessionConfiguring = NO;
-        }
+        @try {
+            // Commit any ongoing configuration before stopping.
+            // Use @try/@catch because the sessionConfiguring flag can be out of sync
+            // when beginConfiguration is called from a non-session-queue thread
+            // (e.g. setCaptureSessionPreset: or setVideoFrameRate:).
+            if (_flags.sessionConfiguring) {
+                [_captureSession commitConfiguration];
+                _flags.sessionConfiguring = NO;
+            }
 
-        if ([_captureSession isRunning])
-            [_captureSession stopRunning];
+            if ([_captureSession isRunning])
+                [_captureSession stopRunning];
+        }
+        @catch (NSException *exception) {
+            DLog(@"exception stopping capture session (%@), attempting commitConfiguration and retry", exception);
+            @try {
+                [_captureSession commitConfiguration];
+                _flags.sessionConfiguring = NO;
+                [_captureSession stopRunning];
+            }
+            @catch (NSException *retryException) {
+                DLog(@"failed to stop capture session after retry (%@)", retryException);
+            }
+        }
 
         [self _executeBlockOnMainQueue:^{
             if ([_delegate respondsToSelector:@selector(visionSessionDidStopPreview:)]) {
